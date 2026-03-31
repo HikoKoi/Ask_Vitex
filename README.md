@@ -22,15 +22,14 @@ Ask_Vitex là một dự án chatbot thông minh được tích hợp trên nề
 
 ## Kiến trúc hệ thống
 
-.
-├── data/               # Chứa các file quy chế (.pdf, .docx)
-├── faiss_db/           # Kho lưu trữ vector sau khi nạp dữ liệu
-├── src/
-│   ├── ingestion.py    # Module xử lý nạp dữ liệu
-│   └── rag_engine.py   # Module logic RAG và LangChain
-├── main.py             # FastAPI Webhook cho Google Chat
-├── .env                # Lưu trữ GOOGLE_API_KEY
-└── pyproject.toml      # Cấu hình thư viện Poetry
+- ├── data/               # Chứa các file quy chế (.pdf, .docx)
+- ├── faiss_db/           # Kho lưu trữ vector sau khi nạp dữ liệu
+- ├── src/
+- │   ├── ingestion.py    # Module xử lý nạp dữ liệu
+- │   └── rag_engine.py   # Module logic RAG và LangChain
+- ├── main.py             # FastAPI Webhook cho Google Chat
+- ├── .env                # Lưu trữ GOOGLE_API_KEY
+- └── pyproject.toml      # Cấu hình thư viện Poetry
 
 ## Hướng dẫn sử dụng
 
