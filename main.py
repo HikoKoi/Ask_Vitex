@@ -10,7 +10,7 @@ app = FastAPI(title="Vitex RAG Bot")
 
 r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 # Lưu lại 6 cặp hỏi đáp gần nhất
-MAX_HISTORY = 6 
+MAX_HISTORY = 10
 # Tự động xóa lịch sử sau 1h không hoạt động
 TTL_SECONDS = 60*60
 

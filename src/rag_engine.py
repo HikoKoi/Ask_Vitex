@@ -84,7 +84,6 @@ chain = (
 
 async def ask_vitex(question: str, history: str = ""):
     print(f"User nhắn: {question}")
-    print(f"History: {history}")
     try:
         return await chain.ainvoke({"question": question, "history": history})
     except Exception as e:
