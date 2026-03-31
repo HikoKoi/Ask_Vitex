@@ -1,11 +1,18 @@
 from fastapi import FastAPI, Request
 import uvicorn
 import os
+import redis
 
 # Import hàm từ thư mục src
 from src.rag_engine import ask_vitex
 
 app = FastAPI(title="Vitex RAG Bot")
+
+r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+# Lưu lại 6 cặp hỏi đáp gần nhất
+MAX_HISTORY = 6 
+# Tự động xóa lịch sử sau 1h không hoạt động
+TTL_SECONDS = 60*60
 
 @app.get("/")
 async def health_check():
@@ -19,14 +26,19 @@ async def google_chat_webhook(request: Request):
                 .get("user", {})
                 .get("displayName"))
     if "messagePayload" in chat_event:
-        user_text = (chat_event
-                    .get("messagePayload", {})
-                    .get("message", {})
-                    .get("argumentText"))
-        
+        msg = (chat_event
+                .get("messagePayload", {})
+                .get("message", {}))
+        user_text = msg.get("argumentText")
+        thread_name = msg.get("thread", {}).get("name")
         if user_text:
             try:
-                answer = await ask_vitex(user_text)
+                history = r.lrange(thread_name, 0, -1) if thread_name else []
+                answer = await ask_vitex(user_text, history)
+                if thread_name:
+                    r.rpush(thread_name, f"User: {user_text}", f"Bot: {answer}")
+                    r.expire(thread_name, TTL_SECONDS)
+                    r.ltrim(thread_name, -MAX_HISTORY, -1)
                 return create_action_response(answer)
                 
             except Exception as e:
