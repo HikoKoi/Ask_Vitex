@@ -9,10 +9,12 @@ from src.rag_engine import ask_vitex
 app = FastAPI(title="Vitex RAG Bot")
 
 r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-# Lưu lại 6 cặp hỏi đáp gần nhất
+# Lưu lại 5 cặp hỏi đáp gần nhất
 MAX_HISTORY = 10
 # Tự động xóa lịch sử sau 1h không hoạt động
 TTL_SECONDS = 60*60
+# Lưu lại các không gian đã thêm bot
+ACTIVE_SPACES_KEY = "vitex_active_spaces"
 
 @app.get("/")
 async def health_check():
@@ -25,6 +27,7 @@ async def google_chat_webhook(request: Request):
     user_name = (chat_event
                 .get("user", {})
                 .get("displayName"))
+# Sự kiện nhận tin nhắn
     if "messagePayload" in chat_event:
         msg = (chat_event
                 .get("messagePayload", {})
@@ -45,13 +48,17 @@ async def google_chat_webhook(request: Request):
                 return create_action_response(f"Bot gặp lỗi khi xử lý AI: {str(e)}")
 
         return create_action_response("Tôi đã nhận được tín hiệu nhưng không thấy nội dung tin nhắn của bạn.")
-    
+# Sự kiện thêm bot vào không gian làm việc
     elif "addedToSpacePayload" in chat_event:
-        space_type = (chat_event
+        space = (chat_event
                     .get("addedToSpacePayload", {})
-                    .get("space", {})
-                    .get("type"))
+                    .get("space"))
         
+        space_name = space.get("name")
+        print(f'Added to space: {space_name}')
+        r.sadd(ACTIVE_SPACES_KEY, space_name)
+        
+        space_type = space.get("type")
         if space_type == "DM":
             return create_action_response(f"""Cảm ơn {user_name} đã thêm tôi vào không gian làm việc Direct Message!
 Tôi là Test - trợ lý ảo nội bộ của công ty Vitex, tôi có thể giúp bạn trả lời các câu hỏi liên quan đến quy chế của công ty.
@@ -66,6 +73,17 @@ Hãy hỏi tôi bất cứ điều gì bạn muốn!
 Tôi là Test - trợ lý ảo nội bộ của công ty Vitex, tôi có thể giúp bạn trả lời các câu hỏi liên quan đến quy chế của công ty.
 Hãy @Test tại không gian {space_name} này để hỏi tôi bất cứ điều gì bạn muốn!
 """)
+# Sự kiện xóa bot khỏi không gian làm việc
+    elif "removedFromSpacePayload" in chat_event:
+        space_name = (
+            chat_event
+            .get("removedFromSpacePayload", {})
+            .get("space")
+            .get("name")
+        )
+        r.srem(ACTIVE_SPACES_KEY, space_name)
+
+
 
 def create_action_response(answer):
     return {

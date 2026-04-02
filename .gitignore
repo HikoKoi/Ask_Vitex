@@ -205,3 +205,18 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# 1. Bỏ qua các thư mục chứa dữ liệu và DB
+data/
+faiss_db/
+
+# 2. Bỏ qua file JSON chứa Service Account (Bảo mật!)
+# Bạn có thể ghi đích danh tên file hoặc dùng wildcard
+*.json
+
+# 3. Các file cấu hình môi trường và máy ảo (Nếu chưa có)
+.env
+.venv/
+__pycache__/
+*.pyc
