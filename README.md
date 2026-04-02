@@ -11,6 +11,9 @@ Ask_Vitex là một dự án chatbot thông minh được tích hợp trên nề
 - Sử dụng công nghệ RAG để đảm bảo câu trả lời luôn bám sát tài liệu gốc
 - Tốc độ phản hồi nhanh
 - Độ chính xác cao
+- Gửi tin nhắn vào khung giờ cố định hàng ngày
+- Chào khi đươc thêm vào workspace
+- Nhớ được ngữ cảnh gần trong cuộc trò chuyện
 
 ## Công nghệ sử dụng
 
@@ -19,6 +22,7 @@ Ask_Vitex là một dự án chatbot thông minh được tích hợp trên nề
 - HuggingFace
 - FAISS
 - Google Chat
+- Redis
 
 ## Kiến trúc hệ thống
 
@@ -28,6 +32,7 @@ Ask_Vitex là một dự án chatbot thông minh được tích hợp trên nề
 - │   ├── ingestion.py    # Module xử lý nạp dữ liệu
 - │   └── rag_engine.py   # Module logic RAG và LangChain
 - ├── main.py             # FastAPI Webhook cho Google Chat
+- ├── scheduler_worker.py # Worker gửi tin nhắn vào khung giờ cố định hàng ngày
 - ├── .env                # Lưu trữ GOOGLE_API_KEY
 - └── pyproject.toml      # Cấu hình thư viện Poetry
 
@@ -43,6 +48,7 @@ poetry install
 
 ```bash
 GOOGLE_API_KEY=your_gemini_api_key_here
+SERVICE_ACCOUNT_FILE=your_service_account_file.json
 ```
 
 ### 3. Nạp dữ liệu
@@ -67,6 +73,10 @@ ngrok http 8000
 
 Copy URL từ Ngrok (ví dụ: https://xyz.ngrok-free.app/webhook) và dán vào phần cấu hình App URL trong Google Chat API
 
+### 7. Chạy scheduler worker
 
+```bash
+poetry run python scheduler_worker.py
+```
 
 
