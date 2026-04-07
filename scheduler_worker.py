@@ -1,113 +1,63 @@
 import asyncio
-import redis
-import httpx
 import os
+import json
+import redis
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from datetime import datetime
-from dotenv import load_dotenv
-from google.oauth2 import service_account
-from google.auth.transport.requests import Request
-
-
-load_dotenv()
-# llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=1)
+from src.message import broadcast_message # Import từ file mới
 
 # Kết nối Redis
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-ACTIVE_SPACES_KEY = "vitex_active_spaces"
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+r = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
 
+scheduler = AsyncIOScheduler()
 
-# simple_chain = llm | StrOutputParser()
-
-# async def call_llm(message: str):
-#     try:
-#         return await simple_chain.ainvoke(message)
-#     except Exception as e:
-#         return f"Lỗi rồi Darwin ơi: {e}"
-
-def get_token():    
-    # Nối với tên file JSON
-    SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
+async def sync_schedules_from_redis():
+    """Đọc cấu hình từ Redis và cập nhật vào Scheduler"""
+    print("🔄 Đang đồng bộ lịch từ Redis...")
     
-    print(f"🔍 Đang tìm file tại: {SERVICE_ACCOUNT_FILE}")
-    # Đường dẫn tới file JSON bạn vừa tải về
-    SCOPES = ['https://www.googleapis.com/auth/chat.bot']
-
-    # Khởi tạo Credentials từ file JSON
-    creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
-    )
-
-    # Refresh để lấy Token mới
-    creds.refresh(Request())
+    # Lấy tất cả lịch hẹn từ Hash key 'vitex_schedules'
+    # Hash này được nạp dữ liệu từ trang Admin Streamlit
+    schedules = r.hgetall("vitex_schedules")
     
-    # Return token
-    return creds.token
+    # Xóa các job cũ (ngoại trừ job sync này) để nạp lại từ đầu
+    current_jobs = scheduler.get_jobs()
+    for job in current_jobs:
+        if job.id != "sync_task":
+            scheduler.remove_job(job.id)
 
-async def broadcast_message(type="morning"):
-    print(f"⏰ [{datetime.now()}] Bắt đầu gửi tin nhắn: {type}")
-    
-    token = get_token()
-    active_spaces = r.smembers(ACTIVE_SPACES_KEY)
-    
-    if not active_spaces:
-        print("❌ Không tìm thấy Space nào trong Redis.")
-        return
-
-    # Tùy chỉnh nội dung theo buổi
-    if type == "morning":
-        message_text = "Chào buổi sáng anh em Vitex! Chúc mọi người một ngày làm việc thật hiệu quả và tràn đầy năng lượng nhé! 🚀"
-    else:
-        message_text = "Đã 5h chiều rồi anh em ơi! Vào họp thôi cả nhà ơi"
-
-    #message_text = await call_llm(prompt)
-
-    async with httpx.AsyncClient() as client:
-        for space_id in active_spaces:
-            url = f"https://chat.googleapis.com/v1/{space_id}/messages"
-            headers = {"Authorization": f"Bearer {token}"}
-            try:
-                await client.post(url, json={"text": message_text}, headers=headers)
-                print(f"✅ Đã gửi tới {space_id}")
-            except Exception as e:
-                print(f"🔥 Lỗi khi gửi tới {space_id}: {e}")
+    # Nạp lịch mới
+    for job_id, job_json in schedules.items():
+        try:
+            j = json.loads(job_json)
+            scheduler.add_job(
+                broadcast_message,
+                'cron',
+                day_of_week=j.get('days', 'mon-fri'),
+                hour=j.get('hour'),
+                minute=j.get('minute'),
+                args=[j.get('type'), j.get('msg')],
+                id=job_id,
+                misfire_grace_time=300
+            )
+            print(f"➕ Đã nạp lịch: {j['hour']}:{j['minute']} ({j['type']})")
+        except Exception as e:
+            print(f"❌ Lỗi khi nạp job {job_id}: {e}")
 
 async def main():
-    scheduler = AsyncIOScheduler()
-
-    # CẤU HÌNH QUAN TRỌNG: day_of_week='mon-fri' để bỏ qua Thứ 7, Chủ Nhật
+    # 1. Job đặc biệt: Cứ mỗi 1 phút lại kiểm tra Redis xem có lịch mới không
+    scheduler.add_job(sync_schedules_from_redis, 'interval', minutes=1, id="sync_task")
     
-    # 1. Chào buổi sáng lúc 8:00 (Thứ 2 -> Thứ 6)
-    scheduler.add_job(
-        broadcast_message, 
-        'cron', 
-        day_of_week='mon-fri', 
-        hour=8, 
-        minute=0, 
-        args=["morning"],
-        misfire_grace_time=300
-    )
-
-    # 2. Tạm biệt lúc 17:00 (Thứ 2 -> Thứ 6)
-    scheduler.add_job(
-        broadcast_message, 
-        'cron', 
-        day_of_week='mon-fri', 
-        hour=17, 
-        minute=0, 
-        args=["afternoon"],
-        misfire_grace_time=300
-    )
-
+    # 2. Chạy lần đầu ngay lập tức
+    await sync_schedules_from_redis()
+    
     scheduler.start()
-    print("🚀 Worker đã sẵn sàng! Lịch trình: 8h sáng & 5h chiều (T2-T6).")
-    
-    # Giữ cho script luôn chạy ngầm
+    print("🚀 Worker đã sẵn sàng và đang lắng nghe Redis!")
+
     try:
         while True:
             await asyncio.sleep(1)
     except (KeyboardInterrupt, SystemExit):
-        pass
+        print("Stopping worker...")
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -7,10 +7,10 @@ import redis
 from src.rag_engine import ask_vitex
 
 app = FastAPI(title="Vitex RAG Bot")
-
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-# Lưu lại 5 cặp hỏi đáp gần nhất
-MAX_HISTORY = 10
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+r = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
+# Lưu lại 3 cặp hỏi đáp gần nhất
+MAX_HISTORY = 6
 # Tự động xóa lịch sử sau 1h không hoạt động
 TTL_SECONDS = 60*60
 # Lưu lại các không gian đã thêm bot
